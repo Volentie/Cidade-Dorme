@@ -11,6 +11,7 @@ function InitializateCore()
     _G.Core = {
         Knit = Knit,
         Signal = Signal,
+        GameConfig = require(script.Parent.Metadata:WaitForChild("GameConfig")),
     }
 end
 
@@ -22,6 +23,14 @@ function LoadControllers()
             local moduleTable = require(controller)
             assert(type(moduleTable) == "table", "Module must return a table")
             Controllers[moduleTable.Name] = moduleTable
+        end
+    end
+end
+
+function InitControllers()
+    for _, controller in Controllers do
+        if controller.Init then
+            controller:Init()
         end
     end
 end
@@ -38,6 +47,7 @@ function Boot()
     InitializateCore()
     Knit.Start():catch(warn)
     LoadControllers()
+    InitControllers()
     StartControllers()
 end
 
