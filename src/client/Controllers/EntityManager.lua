@@ -6,30 +6,29 @@ local EntityManager = Knit.CreateController{
     Name = "EntityManager",
 }
 
-EntityManager.ActivePlayers = {}
-
 local PlayerManager, RoleManager
+local PlayersDB -- PlayerManager.PlayersDB
 
-local Game_Scene = workspace:WaitForChild("Game_Scene")
-local NPCs = Game_Scene:WaitForChild("NPCs")
-local LocalPlayer = game:GetService("Players").LocalPlayer
+local Game_Scene: Folder = workspace:WaitForChild("Game_Scene")
+local NPCs: Folder = Game_Scene:WaitForChild("NPCs")
+local LocalPlayer: Player = game:GetService("Players").LocalPlayer
 
-function EntityManager:SetupPlayer(UserId: number, isNPC: boolean)
+function EntityManager:GetNPCMesh(Id: number)
+    return NPCs:WaitForChild("Meshes/npc"..tostring(Id))
+end
+
+function EntityManager:SetupPlayer(UserId: number, playerType: string, meshPart: MeshPart?)
     assert(UserId, "UserId must be provided")
     assert(type(UserId) == "number", "UserId must be a number")
-    local plyObj = PlayerManager.CreatePlayer(UserId)
-    if isNPC then
-        plyObj:SetNPC(NPCs:WaitForChild(UserId))
-    end
-    self.ActivePlayers[UserId] = plyObj
+    PlayerManager.CreatePlayer(UserId, playerType, meshPart)
 end
 
 function EntityManager:BuildAllPlayers()
     for i = 1, GameConfig.NPCCount do
         local npcID = i
-        self:SetupPlayer(npcID, true)
+        self:SetupPlayer(npcID, "npc", self:GetNPCMesh(npcID))
     end
-    self:SetupPlayer(LocalPlayer.UserId)
+    self:SetupPlayer(LocalPlayer.UserId, "player")
 end
 
 function EntityManager:BuildAllRoles()
@@ -38,26 +37,27 @@ function EntityManager:BuildAllRoles()
     end
 end
 
-
 function EntityManager:AssignPlayersRoles()
     math.randomseed(tick())
-    for _, ply in PlayerManager.ActivePlayers do
-        ply:AssignRole(RoleManager.GetRandomRole())
+    for _, ply in PlayersDB.All do
+        ply:AssignRole(RoleManager.GenerateRandomRole())
     end
 end
 
 function EntityManager:ListenSignals()
     PlayerManager.PlayerDeactivated:Connect(function(UserId)
-        self.ActivePlayers[UserId] = nil
+        PlayersDB.Alive[UserId] = nil
     end)
 end
 
 function EntityManager:Init()
     PlayerManager = Knit.GetController("PlayerManager")
     RoleManager = Knit.GetController("RoleManager")
+    PlayersDB = PlayerManager.PlayersDB
 
     self:BuildAllPlayers()
     self:BuildAllRoles()
+    self:AssignPlayersRoles()
     self:ListenSignals()
 end
 

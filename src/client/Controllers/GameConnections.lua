@@ -10,14 +10,16 @@ function GameConnections:Append(name, callback)
     self.Connections[name] = {Callback = callback}
 end
 
-function GameConnections:Connect(name, eventName)
+function GameConnections:Connect(name, service, eventName)
     assert(self.Connections[name], "Connection named " .. name .. " not found")
     assert(eventName, "Event name must be provided")
-    local runService = game:GetService("RunService")
-    assert(runService[eventName], "Event named " .. eventName .. " is not a valid Roblox event")
+    local gameService = game:GetService(service)
+    assert(gameService, "Service " .. service .. " not found")
+    local event = gameService[eventName]
+    assert(event, "Event " .. eventName .. " not found in service " .. service)
 
     local callback = self.Connections[name].Callback
-    self.Connections[name]["Connection"] = runService[eventName]:Connect(callback)
+    self.Connections[name]["Connection"] = event:Connect(callback)
 end
 
 function GameConnections:Disconnect(name)

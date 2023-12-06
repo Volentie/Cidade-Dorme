@@ -11,9 +11,9 @@ function GameLoop.Loop()
     turnState:SetState(0)
     
     -- Start
-    print(turnState:GetState())
+    --print(turnState:GetState())
 
-    task.wait(0.5)
+    task.wait(0.1)
 end
 
 return GameLoop

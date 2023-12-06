@@ -2,23 +2,40 @@ Knit = _G.Core.Knit
 Signal = _G.Core.Signal
 
 PlayerManager = Knit.CreateController {
-    Name = "PlayerManager",
-    PlayersDB = {}
+    Name = "PlayerManager",    
 }
 
+PlayerManager.__index = PlayerManager
+
+PlayerManager.PlayersDB = {
+    All = {},
+    Alive = {}
+}
 PlayerManager.PlayerDeactivated = Signal.new()
 
-function PlayerManager.CreatePlayer(UserId: number)
+function PlayerManager.AddPlayerToDB(UserId: number, playerInstance: table)
+    PlayerManager.PlayersDB.All[UserId] = playerInstance
+    PlayerManager.PlayersDB.Alive[UserId] = playerInstance
+end
+
+function PlayerManager.CreatePlayer(UserId: number, playerType: string, meshPart: MeshPart?)
     assert(UserId, "PlayerID must be provided")
     assert(type(UserId) == "number", "UserId must be a number")
+    assert(playerType, "playerType must be provided")
+    assert(type(playerType) == "string", "playerType must be a string")
     
     local self = setmetatable({}, PlayerManager)
     
     self.UserId = UserId
     self.IsAlive = true
     self.Votes = 0
+    self.Type = playerType
 
-    PlayerManager.PlayersDB[UserId] = self
+    if self.Type == "npc" then
+        self.Part = meshPart
+    end
+
+    PlayerManager.AddPlayerToDB(UserId, self)
 
     return self
 end
@@ -28,13 +45,6 @@ function PlayerManager:AssignRole(Role: table)
     assert(type(Role) == "table", "Role must be a table")
 
     self.Role = Role
-end
-
-function PlayerManager:SetNPC(meshPart: MeshPart)
-    assert(meshPart, "MeshPart must be provided")
-    assert(meshPart:IsA("MeshPart"), "MeshPart must be a MeshPart")
-
-    self.NPC = meshPart
 end
 
 function PlayerManager:IncrementVotes()

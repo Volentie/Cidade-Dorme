@@ -15,8 +15,8 @@ return {
         MinGood = MIN_GOOD,
         MaxGood = MAX_GOOD
     },
+    RolesMeta = {"Assassin", "Seer", "Villager"},
     Roles = {
-        Meta = {"Assassin", "Seer", "Villager"},
         Assassin = {
             Behaviour = {
                 Nightfall = "Kill",
