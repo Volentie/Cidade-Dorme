@@ -12,6 +12,7 @@ local Camera = game.Workspace.CurrentCamera
 
 -- Camera settings
 local basePosition = Vector3.new(0, 4, 17.5)
+local baseFocus = Vector3.new(0.07, 4.2, -6.597)
 local sensitivity = 0.005
 local maxYaw = math.rad(90)
 local maxPitch = math.rad(90)
@@ -36,6 +37,8 @@ function CameraHandler:Setup()
         -- Apply rotation while maintaining the original position
         local newOrientation = CFrame.Angles(currentPitch, currentYaw, 0):ToObjectSpace()
         Camera.CFrame = CFrame.new(basePosition) * newOrientation
+        -- We need to update this as well, otherwise it goes crazy for some reason
+        Camera.Focus = CFrame.new(baseFocus)
     end
 
     function CameraHandler:Connect()

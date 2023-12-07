@@ -1,9 +1,18 @@
 Core = _G.Core
 Knit = Core.Knit
+GameConfig = Core.GameConfig
+local Settings = GameConfig.GameSettings
 
 local GameManager = Knit.CreateController {
     Name = "GameManager"
 }
+
+-- Services
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- Imports
+local GameState, GameConnections, GameLoop
 
 function GameManager:LoadGameHandlers()
     for _, moduleScript in ipairs(script:GetChildren()) do
@@ -27,42 +36,45 @@ function GameManager:ConfigurePlayer()
     humanoid.JumpPower = 0
 end
 
+function GameManager:CreateTween(TweenConfig: table)
+    local info = TweenInfo.new(TweenConfig.Time, TweenConfig.Style)
+    return TweenService:Create(TweenConfig.Object, info, TweenConfig.Props)
+end
+
+function GameManager:SetInitialGameSettings()
+    for service, serviceTab in Settings.InitialConfigs.Services do
+        for obj, props in serviceTab do
+            local gameService = game:GetService(service)
+            for prop, value in props do
+                gameService[obj][prop] = value
+            end
+        end
+    end
+end
+
 function GameManager:Init()
     self:LoadGameHandlers()
     self:ConfigurePlayer()
+    self:SetInitialGameSettings()
 end
 
 function GameManager:Start()
-    local GameState = Knit.GetController("GameState")
-    local GameConnections = Knit.GetController("GameConnections")
-    local GameLoop = Knit.GetController("GameLoop")
-
-    -- Create game run state
-    self.RunState = GameState:CreateState("RunState")
-    -- Create game loop connection
-    GameConnections:Append("GameLoop", GameLoop.Loop)
-
-    -- Listen for state changes and connect/disconnect the game loop
-    self.RunState.Changed:Connect(function(state)
-        if state == 1 then
-            GameConnections:Connect("GameLoop", "RunService", "Heartbeat")
-        else
-            GameConnections:Disconnect("GameLoop")
-        end
-    end)
+    GameConnections = Knit.GetController("GameConnections")
+    GameLoop = Knit.GetController("GameLoop")
 
     -- Run the game
     self:Run()
 end
 
 function GameManager:Run()
-    self.RunState:SetState(1)
-    self.RunState:Fire()
-end
+    local function startGame()
+        print("loop has started")
+        GameLoop.Event:Fire(true)
+    end
 
-function GameManager:Stop()
-    self.RunState:SetState(0)
-    self.RunState:Fire()
+    local fadeTween = GameConnections:Append("StartFade", startGame, self:CreateTween(Settings.Tweens.Blur))
+    GameConnections:ConnectOnce("StartFade", "Completed")
+    fadeTween:Play()
 end
 
 return GameManager

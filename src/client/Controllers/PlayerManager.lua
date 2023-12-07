@@ -31,6 +31,8 @@ function PlayerManager.new(UserId: number, playerType: string, meshPart: MeshPar
     if self.Type == "npc" then
         self.Part = meshPart
         meshPart:SetAttribute("UserId", UserId)
+
+        self.Chasing = false
     end
 
     return self
@@ -54,9 +56,7 @@ end
 
 function PlayerManager:Kill()
     self.Alive = false
-    if self.Part then
-        self.Part:Destroy()
-    end
+    self.Part:Destroy()
     Database.Players[self.UserId] = nil
 end
 

@@ -1,12 +1,16 @@
-local a = {
-    1, 3, 4, 5
+local t = {
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h"
 }
 
-
-
-for k, v in pairs(a) do
-    if k == 2 then
-        a[k] = nil
-    end
-    print(k, v)
+for i = #t, 2, -1 do
+    local j = math.random(i)
+    t[i], t[j] = t[j], t[i]
 end
+print(table.concat(t, ", "))

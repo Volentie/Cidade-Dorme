@@ -36,6 +36,10 @@ function EntityManager:BuildAllPlayers()
     end
     local ply = self:SetupPlayer(LocalPlayer.UserId, "player")
     table.insert(cache.Players, ply)
+    for i = #cache.Players, 2, -1 do
+        local j = math.random(i)
+        cache.Players[i], cache.Players[j] = cache.Players[j], cache.Players[i]
+    end
 end
 
 function EntityManager:FillGameRoles()
@@ -56,6 +60,7 @@ function EntityManager:FillGameRoles()
     local randRoleMetadata = RoleManager:GenerateRandomRoleMetadata(lastRandRole)
     RoleManager.new(randRoleMetadata)
     cache.Players[1]:AssignLiveRole(randRoleMetadata.Name)
+    table.remove(cache.Players, 1)
 end
 
 function EntityManager:Start()
