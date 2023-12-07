@@ -1,19 +1,32 @@
 Core = _G.Core
 Knit = Core.Knit
 
+-- Import
+local _type = require(script.Parent.Parent.TypeDefs)
+
 local GameLoop = Knit.CreateController{
     Name = "GameLoop"
 }
 
-function GameLoop.Loop()
-    local GameState = Knit.GetController("GameState")
-    local turnState = GameState:CreateState("TurnState")
-    turnState:SetState(0)
-    
-    -- Start
-    --print(turnState:GetState())
+local GameState, turnState, Database: _type.Database
 
-    task.wait(0.1)
+function GameLoop:Init()
+    GameState = Knit.GetController("GameState")
+    turnState = GameState:CreateState("TurnState")
+    Database = Knit.GetController("Database")
+end
+
+function GameLoop:AlterTime(time)
+    turnState:SetState(time == "day" and 0 or 1)
+end
+
+function GameLoop.Loop()
+
+    --print(10)
+    GameLoop:AlterTime("day")
+
+
+    task.wait(10)
 end
 
 return GameLoop

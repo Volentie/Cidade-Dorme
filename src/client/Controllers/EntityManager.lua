@@ -6,8 +6,13 @@ local EntityManager = Knit.CreateController{
     Name = "EntityManager",
 }
 
-local PlayerManager, RoleManager
-local PlayersDB -- PlayerManager.PlayersDB
+-- Imports
+local _type = require(script.Parent.Parent.TypeDefs)
+local PlayerManager, RoleManager, Database: _type.Database
+
+local cache = {
+    Players = {}
+}
 
 local Game_Scene: Folder = workspace:WaitForChild("Game_Scene")
 local NPCs: Folder = Game_Scene:WaitForChild("NPCs")
@@ -20,45 +25,46 @@ end
 function EntityManager:SetupPlayer(UserId: number, playerType: string, meshPart: MeshPart?)
     assert(UserId, "UserId must be provided")
     assert(type(UserId) == "number", "UserId must be a number")
-    PlayerManager.CreatePlayer(UserId, playerType, meshPart)
+    return PlayerManager.new(UserId, playerType, meshPart)
 end
 
 function EntityManager:BuildAllPlayers()
     for i = 1, GameConfig.NPCCount do
         local npcID = i
-        self:SetupPlayer(npcID, "npc", self:GetNPCMesh(npcID))
+        local npc = self:SetupPlayer(npcID, "npc", self:GetNPCMesh(npcID))
+        table.insert(cache.Players, npc)
     end
-    self:SetupPlayer(LocalPlayer.UserId, "player")
+    local ply = self:SetupPlayer(LocalPlayer.UserId, "player")
+    table.insert(cache.Players, ply)
 end
 
-function EntityManager:BuildAllRoles()
-    for roleName, roleTable in GameConfig.Roles do
-        RoleManager.CreateRole(roleName, roleTable.Behaviour)
-    end
-end
-
-function EntityManager:AssignPlayersRoles()
+function EntityManager:FillGameRoles()
     math.randomseed(tick())
-    for _, ply in PlayersDB.All do
-        ply:AssignRole(RoleManager.GenerateRandomRole())
+    local types = {"Good", "Evil"}
+    local function fillRoles(type: string)
+        for i=1, GameConfig.Constraints["Min"..type] do
+            local randRoleMetadata = RoleManager:GenerateRandomRoleMetadata(type)
+            RoleManager.new(randRoleMetadata)
+            cache.Players[i]:AssignLiveRole(randRoleMetadata.Name)
+            table.remove(cache.Players, i)
+        end
     end
+    for _, type in ipairs(types) do
+        fillRoles(type)
+    end
+    local lastRandRole = types[math.random(1, #types)]
+    local randRoleMetadata = RoleManager:GenerateRandomRoleMetadata(lastRandRole)
+    RoleManager.new(randRoleMetadata)
+    cache.Players[1]:AssignLiveRole(randRoleMetadata.Name)
 end
 
-function EntityManager:ListenSignals()
-    PlayerManager.PlayerDeactivated:Connect(function(UserId)
-        PlayersDB.Alive[UserId] = nil
-    end)
-end
-
-function EntityManager:Init()
+function EntityManager:Start()
     PlayerManager = Knit.GetController("PlayerManager")
     RoleManager = Knit.GetController("RoleManager")
-    PlayersDB = PlayerManager.PlayersDB
+    Database = Knit.GetController("Database")
 
     self:BuildAllPlayers()
-    self:BuildAllRoles()
-    self:AssignPlayersRoles()
-    self:ListenSignals()
+    self:FillGameRoles()
 end
 
 return EntityManager

@@ -1,24 +1,20 @@
 Knit = _G.Core.Knit
 Signal = _G.Core.Signal
 
+-- Imports
+local _type = require(script.Parent.Parent.TypeDefs)
+local Database: _type.Database
+
 PlayerManager = Knit.CreateController {
     Name = "PlayerManager",    
 }
-
 PlayerManager.__index = PlayerManager
 
-PlayerManager.PlayersDB = {
-    All = {},
-    Alive = {}
-}
-PlayerManager.PlayerDeactivated = Signal.new()
-
-function PlayerManager.AddPlayerToDB(UserId: number, playerInstance: table)
-    PlayerManager.PlayersDB.All[UserId] = playerInstance
-    PlayerManager.PlayersDB.Alive[UserId] = playerInstance
+function PlayerManager:Init()
+    Database = Knit.GetController("Database")
 end
 
-function PlayerManager.CreatePlayer(UserId: number, playerType: string, meshPart: MeshPart?)
+function PlayerManager.new(UserId: number, playerType: string, meshPart: MeshPart?)
     assert(UserId, "PlayerID must be provided")
     assert(type(UserId) == "number", "UserId must be a number")
     assert(playerType, "playerType must be provided")
@@ -27,24 +23,25 @@ function PlayerManager.CreatePlayer(UserId: number, playerType: string, meshPart
     local self = setmetatable({}, PlayerManager)
     
     self.UserId = UserId
-    self.IsAlive = true
-    self.Votes = 0
     self.Type = playerType
+    self.Alive = true
+    self.Votes = 0
+    self.Role = false
 
     if self.Type == "npc" then
         self.Part = meshPart
+        meshPart:SetAttribute("UserId", UserId)
     end
-
-    PlayerManager.AddPlayerToDB(UserId, self)
 
     return self
 end
 
-function PlayerManager:AssignRole(Role: table)
-    assert(Role, "Role must be provided")
-    assert(type(Role) == "table", "Role must be a table")
+function PlayerManager:AssignLiveRole(roleName: string)
+    assert(roleName, "roleName must be provided")
+    assert(type(roleName) == "string", "roleName must be a string")
 
-    self.Role = Role
+    self.Role = Database.Roles[roleName]
+    Database.Players[self.UserId] = self
 end
 
 function PlayerManager:IncrementVotes()
@@ -55,9 +52,12 @@ function PlayerManager:ResetVotes()
     self.Votes = 0
 end
 
-function PlayerManager:DeactivatePlayer()
-    self.IsAlive = false
-    self.PlayerDeactivated:Fire(self.UserId)
+function PlayerManager:Kill()
+    self.Alive = false
+    if self.Part then
+        self.Part:Destroy()
+    end
+    Database.Players[self.UserId] = nil
 end
 
 function PlayerManager:IsAlive()
