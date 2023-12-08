@@ -197,6 +197,7 @@ function KnitClient.AddControllers(parent: Instance): { Controller }
 		end
 		table.insert(addedControllers, require(v))
 	end
+	
 	return addedControllers
 end
 

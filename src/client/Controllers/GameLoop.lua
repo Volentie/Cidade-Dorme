@@ -1,26 +1,31 @@
-local UserInputService = game:GetService("UserInputService")
-Core = _G.Core
-Knit = Core.Knit
-Signal = Core.Signal
+local GameLoop = _G.Core.Knit.CreateController {
+    Name = "GameLoop"
+}
+Signal = _G.Core.Signal
+
 
 -- Import
 local _type = require(script.Parent.Parent.TypeDefs)
+local Database: _type.Database, GameConnections
 
-local GameLoop = Knit.CreateController{
-    Name = "GameLoop"
-}
-
-GameLoop.Event = Signal.new()
-GameLoop.Running = false
-
-local GameState, Database: _type.Database
-local GameConnections
-local turnState, currentAction
+function GameLoop:KnitInit()
+    Database = _G.Core.Knit.GetController("Database")
+    GameConnections = _G.Core.Knit.GetController("GameConnections")
+end
 
 -- Services
-local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local Lighting = game:GetService("Lighting")
+
+-- GameOver Screen UI
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local GameOverScreen = PlayerGui:WaitForChild("GameOverScreen")
+local GameOverFrame = GameOverScreen:WaitForChild("GameOverFrame")
+local GameOverText = GameOverFrame:WaitForChild("GameOverText")
+local YouDiedText = GameOverScreen:WaitForChild("YouDiedText")
+local YourTurnText = GameOverScreen:WaitForChild("YourTurnText")
 
 -- Game dynamics
 local Camera = game.Workspace.CurrentCamera
@@ -33,26 +38,41 @@ local CardsSpotLightBellow = Game_Utils:WaitForChild("CardsSpotLightBellow"):Wai
 local PlayerRole = nil
 local baseCamPos = Vector3.new(0, 4, 17.5)
 
-local deathVotes = {}
-local isPlayerLocked = true
+local isPlayerAimLocked = true
 local selectedNPC = nil
-local gameQueue = 0
+local shouldBlur = false
+local ScreenBlur, ScreenUnblur
+local isLocalPlayerDead = false
 
 -- Triggers
 local IsCardVisible = false
-
 local objectHighlighted = nil
 
-function GameLoop:Init()
-    GameState = Knit.GetController("GameState")
-    GameConnections = Knit.GetController("GameConnections")
-    turnState = GameState:CreateState("TurnState")
-    currentAction = GameState:CreateState("CurrentAction")
-    Database = Knit.GetController("Database")
+GameLoop.Event = Signal.new()
+GameLoop.Running = false
+GameLoop.Time = "Nightfall"
+
+function GameLoop:ShiftDaytime()
+    self.Time = self.Time == "Nightfall" and "Dawn" or "Nightfall"
+    -- tween to shift day, if nightfall tween to 0, if dawn tween to 12
+    local props = {
+        ClockTime = self.Time == "Nightfall" and 0 or 12
+    }
+    local shiftTween = self:CreateTween(3, Enum.EasingStyle.Linear, game.Lighting, props)
+    shiftTween:Play()
+    shiftTween.Completed:Wait()
 end
 
-function GameLoop:AlterTime()
-    turnState:SetState( bit32.bxor(turnState:GetState(), 1) )
+function GameLoop:ShowGameOverScreen(text)
+    GameOverText.Text = text
+    local showOverFrameTween = self:CreateTween(1, Enum.EasingStyle.Linear, GameOverFrame, {
+        BackgroundTransparency = 0.55
+    })
+    local showOverTextTween = self:CreateTween(1, Enum.EasingStyle.Linear, GameOverText, {
+        TextTransparency = 0
+    })
+    showOverFrameTween:Play()
+    showOverTextTween:Play()
 end
 
 function GameLoop:GetAimObject()
@@ -66,17 +86,22 @@ function GameLoop:GetAimObject()
 end
 
 function GameLoop:HandleHighlight(object)
-    local instance = object and object.Instance
-    if instance and objectHighlighted ~= instance then
-        Highlight.Parent = instance
-        objectHighlighted = instance
-    elseif not instance and objectHighlighted then
-        Highlight.Parent = Game_Utils
-        objectHighlighted = nil
+    if shouldBlur and ScreenUnblur.PlaybackState == Enum.PlaybackState.Completed or not shouldBlur then
+        local instance = object and object.Instance
+        if instance and objectHighlighted ~= instance then
+            Highlight.Parent = instance
+            objectHighlighted = instance
+        elseif not instance and objectHighlighted then
+            Highlight.Parent = Game_Utils
+            objectHighlighted = nil
+        end
     end
-    if self.Running then
+    if not isLocalPlayerDead then
         task.wait(0.1)
         self:HandleHighlight(self:GetAimObject())
+    elseif isLocalPlayerDead and objectHighlighted then
+        Highlight.Parent = Game_Utils
+        objectHighlighted = nil
     end
 end
 
@@ -93,7 +118,7 @@ end
 
 function GameLoop:CreateTween(time, style, object, props)
     local info = TweenInfo.new(time, style)
-    return game:GetService("TweenService"):Create(object, info, props)
+    return TweenService:Create(object, info, props)
 end
 
 function GameLoop:HideCards()
@@ -127,6 +152,10 @@ function GameLoop:TriggerBehaviour(behaviourType: string, player: {}, target: {}
                 -- Player is a NPC, lets make it chase the target if he finds out he's evil
                 if roleType == "Good" then
                     -- To reduce complexity, we'll not track NPC's memory
+                    if player.Chasing then
+                        -- Reset NPC's memory if it was chasing someone before
+                        player.Chasing = nil
+                    end
                     return false
                 end
                 player.Chasing = target
@@ -137,119 +166,187 @@ function GameLoop:TriggerBehaviour(behaviourType: string, player: {}, target: {}
     behaviourLogic[behaviourType](player, target)
 end
 
+function GameLoop:RevealSightIfBlurred()
+    if not shouldBlur then
+        return
+    end
+    ScreenUnblur:Play()
+    ScreenUnblur.Completed:Wait()
+end
+
 function GameLoop:CheckVotes()
-    if gameQueue == #Database.Players then
-        gameQueue = 0
-        -- Reveal who is going to die
-        local mostVoted = nil
-        for _, player in Database.Players do
-            if player.Votes == 0 then
-                continue
-            end
-            if not mostVoted then
-                mostVoted = player
-            end
-            if player.Votes > mostVoted.Votes then
+    -- Reveal who is going to die
+    local mostVoted = nil
+    for _, player in Database.Players do
+        if not mostVoted then
+            mostVoted = player
+        elseif player.Votes > mostVoted.Votes then
+            mostVoted = player
+        elseif player.Votes == mostVoted.Votes then
+            if math.random(1, 2) == 1 then
                 mostVoted = player
             end
         end
+    end
 
-        print("Most voted: ", mostVoted.UserId, "votes: ", mostVoted.Votes)
+    if not mostVoted then
+        print("theres something wrong, no one was voted")
+    end
 
-        if mostVoted.UserId == LocalPlayer.UserId then
-            -- Player is dead
-            print("You died")
-            task.wait(2)
-            -- Close game
-            self.Running = false
-        else
-            -- Fade out the npc and kill it
-            local killTween = self:CreateTween(1, Enum.EasingStyle.Linear, mostVoted.Part, {
-                Transparency = 1
-            })
-            killTween.Completed:Wait()
-            print("killing npc")
-            mostVoted:Kill()
+    print("Most voted: ", mostVoted.UserId, "votes: ", mostVoted.Votes)
+
+    for _, player in Database.Players do
+        player:ResetVotes()
+    end
+
+    self:RevealSightIfBlurred()
+
+    if mostVoted.UserId == LocalPlayer.UserId then
+        -- Player is dead
+        YouDiedText.Visible = true
+        isLocalPlayerDead = true
+        task.wait(0.5)
+        --self.Running = false
+    else
+        warn("Killing npc: "..mostVoted.UserId, "role:", mostVoted.Role.Name)
+
+        -- Fade out the npc and kill it
+        local killTween = self:CreateTween(1, Enum.EasingStyle.Linear, mostVoted.Part, {
+            Transparency = 1
+        })
+        killTween:Play()
+        killTween.Completed:Wait()
+
+        if Highlight.Parent == mostVoted.Part then
+            Highlight.Parent = Game_Utils
         end
-        self:AlterTime()
-        print("turn state: ", turnState:GetState())
+    end
+    mostVoted:Kill()
+    if #Database.Evils == 0 then
+        GameOverText.TextColor3 = Color3.fromRGB(0, 255, 0)
+        self:ShowGameOverScreen("The Villagers win")
+        self.Running = false
+    elseif #Database.Goods == #Database.Evils then
+        GameOverText.TextColor3 = Color3.fromRGB(255, 0, 0)
+        self:ShowGameOverScreen("The Assassins win")
+        self.Running = false
     end
 end
 
 function GameLoop:Loop()
     for _, player in Database.Players do
-        gameQueue += 1
-        if turnState:GetState() == 0 and not player.Role.Behaviour["Nightfall"] then
+        local behaviour = player.Role.Behaviour[self.Time]
+        if not behaviour then
+            if shouldBlur then
+                ScreenBlur:Play()
+                ScreenBlur.Completed:Wait()
+            end
             continue
         end
 
-        local behaviour = player.Role.Behaviour[turnState:GetState() == 0 and "Nightfall" or "Dawn"]
         local target
 
         if player.Type == "npc" then
             -- NPC logic
-            target = Database.Players[math.random(1, #Database.Players)]
-            print("NPC selected: "..target.UserId, "role: ", target.Role.Name)
+            if player.Chasing then
+                -- NPC is chasing a target
+                target = player.Chasing
+                print("NPC ("..player.UserId..", role: "..player.Role.Name..") is chasing the target: "..target.UserId, "which has the role: ", target.Role.Name)
+            else
+                if player.Role.Type == "Evil" then
+                    -- NPC is evil, lets make it vote for a random good player
+                    local randGood = Database.Goods[math.random(1, #Database.Goods)]
+                    target = randGood
+                    print("Assasin ("..player.UserId..", role: "..player.Role.Name..") voted to kill: "..target.UserId, "which has the role: ", target.Role.Name)
+                else
+                    local realocPly, index = Database:RemovePlayerByValue(player)
+                    target = Database.Players[math.random(1, #Database.Players)]
+                    table.insert(Database.Players, index, realocPly)
+                    if player.Role.Name == "Seer" then
+                        -- Print that npc is chasing the target
+                        print("Seer ("..player.UserId..", role: "..player.Role.Name..") revealed the role of: "..target.UserId, "which is", target.Role.Type)
+                    else
+                        print("NPC ("..player.UserId..", role: "..player.Role.Name..") has selected the target: "..target.UserId, "which has the role: ", target.Role.Name)
+                    end
+                end
+            end
             self:TriggerBehaviour(behaviour, player, target)
-        else
+        elseif not isLocalPlayerDead then
             -- Player's turn
-            isPlayerLocked = false  -- Unlock the player's ability to select
+            isPlayerAimLocked = false  -- Unlock the player's ability to select
             repeat
-                print("Your turn, click on a target")
+                if not YourTurnText.Visible then
+                    YourTurnText.Visible = true
+                end
                 task.wait()  -- Wait here for the player's decision
             until selectedNPC
 
+            YourTurnText.Visible = false
+
+            print("You've selected the NPC: " .. selectedNPC.UserId, "which has the role: ", selectedNPC.Role.Name)
             -- Process the player's decision
             self:TriggerBehaviour(behaviour, player, selectedNPC)
 
             -- Add a delay for visualizing the selection
-            task.wait(1.5)
+            task.wait(0.5)
 
             selectedNPC = nil  -- Reset for next turn
-            isPlayerLocked = true  -- Lock the player's ability to select again
-            Selection.Parent = Game_Utils
+            isPlayerAimLocked = true  -- Lock the player's ability to select again
+            if Selection.Parent ~= Game_Utils then
+                Selection.Parent = Game_Utils
+            end
         end
-        self:CheckVotes()
-        task.wait(0.5)
+        task.wait(0.2)
     end
 
+    self:CheckVotes()
+
     if self.Running then
+        -- Time shift
+        self:ShiftDaytime()
+        warn("Starting next loop")
         self:Loop()
     end
 end
 
 GameLoop.Event:Connect(function(bool: boolean)
     if bool then
+
+        -- Blur settings
+        -- Get player role
+        PlayerRole = Database:GetPlayerByUserId(LocalPlayer.UserId).Role
+
+        if not PlayerRole.Behaviour["Nightfall"] then
+            shouldBlur = true
+            ScreenBlur = GameLoop:CreateTween(1, Enum.EasingStyle.Linear, Lighting.Blur, {
+                Size = 56
+            })
+            ScreenUnblur = GameLoop:CreateTween(1, Enum.EasingStyle.Linear, Lighting.Blur, {
+                Size = 0
+            })
+        end
+
         GameLoop.Running = true
-        --[[
-            1. Get player role
-            2. Get player card
-            3. Toggle card visible to show the player their role
-            4. Create a tween to position the card in front of the camera
-            5. Play the tween
-        ]]
         -- Set initial cards visibility
         GameLoop:HideCards()
-        -- Get player role
-        PlayerRole = Database.Players[LocalPlayer.UserId].Role.Name
         -- Get player card
-        local PlayerCard = Cards:WaitForChild(PlayerRole.."-Card")
+        local PlayerCard = Cards:WaitForChild(PlayerRole.Name.."-Card")
         -- Toggle card visible to show the player their role
         GameLoop:ToggleCardVisibility(PlayerCard)
         -- Create a tween to position the card in front of the camera
-        local tween = GameLoop:CreateTween(1, Enum.EasingStyle.Linear, PlayerCard, {
+        local showCardTween = GameLoop:CreateTween(1, Enum.EasingStyle.Linear, PlayerCard, {
             CFrame = CFrame.new(baseCamPos) * CFrame.new(Vector3.new(0, 0, -2)) * CFrame.Angles(math.rad(-90), 0, math.rad(180))
         })
         -- Create another tween to offset the card bellow the camera a bit so the game can continue
-        local tween2 = GameLoop:CreateTween(1, Enum.EasingStyle.Linear, PlayerCard, {
+        local offsetCardBellowTween = GameLoop:CreateTween(1, Enum.EasingStyle.Linear, PlayerCard, {
             CFrame = CFrame.new(baseCamPos) * CFrame.new(Vector3.new(0, -2, -2)) * CFrame.Angles(math.rad(-90), 0, math.rad(180))
         })
-        tween.Completed:Once(function()
+        showCardTween.Completed:Once(function()
             CardsSpotLight.Enabled = true
             task.wait(2)
-            tween2:Play()
+            offsetCardBellowTween:Play()
         end)
-        tween2.Completed:Once(function()
+        offsetCardBellowTween.Completed:Once(function()
             CardsSpotLightBellow.Enabled = true
             -- Handle highlight
             task.spawn(function()
@@ -259,21 +356,27 @@ GameLoop.Event:Connect(function(bool: boolean)
             GameLoop:Loop()
         end)
         -- Play the tween
-        tween:Play()
+        showCardTween:Play()
 
         GameConnections:Append("NPCClick", function(input)
-            if isPlayerLocked then
+            if isPlayerAimLocked then
                 return
             end
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 if not objectHighlighted then
+                    print("trying to click on nothing")
                     return
                 end
-                selectedNPC = Database.Players[objectHighlighted:GetAttribute("UserId")]
+                selectedNPC = Database:GetPlayerByUserId(objectHighlighted:GetAttribute("UserId"))
+                if not selectedNPC then
+                    print("trying to click on an invalid npc " .. objectHighlighted:GetAttribute("UserId"))
+                    return
+                end
             end
         end)
         GameConnections:Connect("NPCClick", "UserInputService", "InputBegan")
     else
+        warn("Finishing game")
         GameLoop.Running = false
     end
 end)

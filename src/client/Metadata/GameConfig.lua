@@ -2,9 +2,9 @@ local Lighting = game:GetService("Lighting")
 local NPC_COUNT = 5
 local TOTAL_PLAYERS = NPC_COUNT + 1
 
-local MIN_EVIL = math.floor(TOTAL_PLAYERS / 3)
+local MIN_EVIL = 1
 --local MAX_EVIL = math.floor(TOTAL_PLAYERS / 2)
-local MIN_GOOD = math.ceil(TOTAL_PLAYERS / 2)
+local MIN_GOOD = 4
 --local MAX_GOOD = MIN_GOOD + 1
 
 -- Blur settings

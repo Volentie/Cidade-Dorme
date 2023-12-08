@@ -1,13 +1,10 @@
-Core = _G.Core
-Knit = Core.Knit
-
 local CameraHandler = {}
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
-local GameConnections = Knit.GetController("GameConnections")
+local GameConnections = _G.Core.Knit.GetController("GameConnections")
 local Camera = game.Workspace.CurrentCamera
 
 -- Camera settings

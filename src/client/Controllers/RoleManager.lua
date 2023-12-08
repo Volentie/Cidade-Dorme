@@ -1,18 +1,17 @@
-Core = _G.Core
-Knit = Core.Knit
-Signal = Core.Signal
-GameConfig = Core.GameConfig
+local RoleManager = _G.Core.Knit.CreateController {
+    Name = "RoleManager"
+}
+RoleManager.__index = RoleManager
+
+Signal = _G.Core.Signal
+GameConfig = _G.Core.GameConfig
 
 -- Imports
 local _type = require(script.Parent.Parent.TypeDefs)
 local Database: _type.Database
 
-local RoleManager = Knit.CreateController {
-    Name = "RoleManager"
-}
-
-function RoleManager:Init()
-    Database = Knit.GetController("Database")
+function RoleManager:KnitInit()
+    Database = _G.Core.Knit.GetController("Database")
 end
 
 function RoleManager.new(roleMeta: table)

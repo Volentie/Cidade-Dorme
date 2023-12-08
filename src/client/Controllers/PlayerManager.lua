@@ -1,17 +1,16 @@
-Knit = _G.Core.Knit
+PlayerManager = _G.Core.Knit.CreateController {
+    Name = "PlayerManager",    
+}
+PlayerManager.__index = PlayerManager
+
 Signal = _G.Core.Signal
 
 -- Imports
 local _type = require(script.Parent.Parent.TypeDefs)
 local Database: _type.Database
 
-PlayerManager = Knit.CreateController {
-    Name = "PlayerManager",    
-}
-PlayerManager.__index = PlayerManager
-
-function PlayerManager:Init()
-    Database = Knit.GetController("Database")
+function PlayerManager:KnitInit()
+    Database = _G.Core.Knit.GetController("Database")
 end
 
 function PlayerManager.new(UserId: number, playerType: string, meshPart: MeshPart?)
@@ -31,8 +30,6 @@ function PlayerManager.new(UserId: number, playerType: string, meshPart: MeshPar
     if self.Type == "npc" then
         self.Part = meshPart
         meshPart:SetAttribute("UserId", UserId)
-
-        self.Chasing = false
     end
 
     return self
@@ -43,7 +40,9 @@ function PlayerManager:AssignLiveRole(roleName: string)
     assert(type(roleName) == "string", "roleName must be a string")
 
     self.Role = Database.Roles[roleName]
-    Database.Players[self.UserId] = self
+    table.insert(Database.Players, self)
+    print(self.Role.Name .. " assigned to " .. self.UserId, "type " .. self.Role.Type)
+    table.insert(Database[self.Role.Type .. "s"], self)
 end
 
 function PlayerManager:IncrementVotes()
@@ -55,9 +54,13 @@ function PlayerManager:ResetVotes()
 end
 
 function PlayerManager:Kill()
+    if self.Type == "npc" then
+        self.Part:Destroy()
+    end
+    
     self.Alive = false
-    self.Part:Destroy()
-    Database.Players[self.UserId] = nil
+    Database:RemovePlayerByValue(self)
+    Database:RemovePlayerByValue(self, self.Role.Type)
 end
 
 function PlayerManager:IsAlive()

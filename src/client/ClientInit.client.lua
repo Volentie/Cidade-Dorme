@@ -15,40 +15,12 @@ function InitializateCore()
     }
 end
 
--- Load all controllers
-function LoadControllers()
-    local controllers = script.Parent.Controllers:GetChildren()
-    for _, controller in controllers do
-        if controller:IsA("ModuleScript") then
-            local moduleTable = require(controller)
-            assert(type(moduleTable) == "table", "Module must return a table")
-            Controllers[moduleTable.Name] = moduleTable
-        end
-    end
-end
-
-function InitControllers()
-    for _, controller in Controllers do
-        if controller.Init then
-            controller:Init()
-        end
-    end
-end
-
-function StartControllers()
-    for _, controller in Controllers do
-        if controller.Start then
-            controller:Start()
-        end
-    end
-end
-
 function Boot()
     InitializateCore()
-    Knit.Start():catch(warn)
-    LoadControllers()
-    InitControllers()
-    StartControllers()
+    Knit.AddControllers(script.Parent.Controllers)
+    Knit.Start():andThen(function()
+        warn("Knit initialized")
+    end):catch(warn)
 end
 
 Boot()

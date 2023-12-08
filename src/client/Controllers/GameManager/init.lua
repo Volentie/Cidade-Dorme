@@ -1,18 +1,15 @@
-Core = _G.Core
-Knit = Core.Knit
-GameConfig = Core.GameConfig
-local Settings = GameConfig.GameSettings
-
-local GameManager = Knit.CreateController {
+local GameManager = _G.Core.Knit.CreateController {
     Name = "GameManager"
 }
 
+GameConfig = _G.Core.GameConfig
+local Settings = GameConfig.GameSettings
+
 -- Services
-local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 -- Imports
-local GameState, GameConnections, GameLoop
+local GameConnections, GameLoop
 
 function GameManager:LoadGameHandlers()
     for _, moduleScript in ipairs(script:GetChildren()) do
@@ -52,23 +49,26 @@ function GameManager:SetInitialGameSettings()
     end
 end
 
-function GameManager:Init()
+function GameManager:KnitInit()
+    GameConnections = _G.Core.Knit.GetController("GameConnections")
+    GameLoop = _G.Core.Knit.GetController("GameLoop")
+
+    local StarterGui = game:GetService("StarterGui")
+    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+    
     self:LoadGameHandlers()
     self:ConfigurePlayer()
     self:SetInitialGameSettings()
 end
 
-function GameManager:Start()
-    GameConnections = Knit.GetController("GameConnections")
-    GameLoop = Knit.GetController("GameLoop")
-
+function GameManager:KnitStart()
     -- Run the game
     self:Run()
 end
 
 function GameManager:Run()
     local function startGame()
-        print("loop has started")
+        warn("loop has started")
         GameLoop.Event:Fire(true)
     end
 

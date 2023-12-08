@@ -1,14 +1,16 @@
-Core = _G.Core
-Knit = Core.Knit
-GameConfig = Core.GameConfig
-
-local EntityManager = Knit.CreateController{
+local EntityManager = _G.Core.Knit.CreateController {
     Name = "EntityManager",
 }
 
+GameConfig = _G.Core.GameConfig
+
 -- Imports
-local _type = require(script.Parent.Parent.TypeDefs)
-local PlayerManager, RoleManager, Database: _type.Database
+local PlayerManager, RoleManager
+
+function EntityManager:KnitInit()
+    PlayerManager = _G.Core.Knit.GetController("PlayerManager")
+    RoleManager = _G.Core.Knit.GetController("RoleManager")
+end
 
 local cache = {
     Players = {}
@@ -34,8 +36,8 @@ function EntityManager:BuildAllPlayers()
         local npc = self:SetupPlayer(npcID, "npc", self:GetNPCMesh(npcID))
         table.insert(cache.Players, npc)
     end
-    local ply = self:SetupPlayer(LocalPlayer.UserId, "player")
-    table.insert(cache.Players, ply)
+    local localPly = self:SetupPlayer(LocalPlayer.UserId, "player")
+    table.insert(cache.Players, localPly)
     for i = #cache.Players, 2, -1 do
         local j = math.random(i)
         cache.Players[i], cache.Players[j] = cache.Players[j], cache.Players[i]
@@ -49,8 +51,8 @@ function EntityManager:FillGameRoles()
         for i=1, GameConfig.Constraints["Min"..type] do
             local randRoleMetadata = RoleManager:GenerateRandomRoleMetadata(type)
             RoleManager.new(randRoleMetadata)
-            cache.Players[i]:AssignLiveRole(randRoleMetadata.Name)
-            table.remove(cache.Players, i)
+            cache.Players[1]:AssignLiveRole(randRoleMetadata.Name)
+            table.remove(cache.Players, 1)
         end
     end
     for _, type in ipairs(types) do
@@ -63,11 +65,7 @@ function EntityManager:FillGameRoles()
     table.remove(cache.Players, 1)
 end
 
-function EntityManager:Start()
-    PlayerManager = Knit.GetController("PlayerManager")
-    RoleManager = Knit.GetController("RoleManager")
-    Database = Knit.GetController("Database")
-
+function EntityManager:KnitStart()
     self:BuildAllPlayers()
     self:FillGameRoles()
 end
