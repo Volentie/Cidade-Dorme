@@ -21,11 +21,12 @@ local Lighting = game:GetService("Lighting")
 
 -- GameOver Screen UI
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local GameOverScreen = PlayerGui:WaitForChild("GameOverScreen")
+local GameOverScreen = PlayerGui:WaitForChild("ScreenGui")
 local GameOverFrame = GameOverScreen:WaitForChild("GameOverFrame")
 local GameOverText = GameOverFrame:WaitForChild("GameOverText")
 local YouDiedText = GameOverScreen:WaitForChild("YouDiedText")
 local YourTurnText = GameOverScreen:WaitForChild("YourTurnText")
+local LastKilledText = GameOverScreen:WaitForChild("LastKilledText")
 
 -- Game dynamics
 local Camera = game.Workspace.CurrentCamera
@@ -33,6 +34,7 @@ local Game_Utils: Folder = game.Workspace:WaitForChild("Game_Utils")
 local Cards: Folder = Game_Utils:WaitForChild("Cards")
 local Highlight = Game_Utils:WaitForChild("Highlight")
 local Selection = Game_Utils:WaitForChild("Selection")
+local AssassinOutline = Game_Utils:WaitForChild("AssassinOutline")
 local CardsSpotLight = Game_Utils:WaitForChild("CardsSpotLight"):WaitForChild("SpotLight")
 local CardsSpotLightBellow = Game_Utils:WaitForChild("CardsSpotLightBellow"):WaitForChild("SpotLight")
 local PlayerRole = nil
@@ -222,6 +224,7 @@ function GameLoop:CheckVotes()
         end
     end
     mostVoted:Kill()
+    LastKilledText.Text = "Last killed: " .. mostVoted.UserId .. ", ROLE: " .. mostVoted.Role.Name
     if #Database.Evils == 0 then
         GameOverText.TextColor3 = Color3.fromRGB(0, 255, 0)
         self:ShowGameOverScreen("The Villagers win")
@@ -230,6 +233,13 @@ function GameLoop:CheckVotes()
         GameOverText.TextColor3 = Color3.fromRGB(255, 0, 0)
         self:ShowGameOverScreen("The Assassins win")
         self.Running = false
+    end
+
+    if not self.Running then
+        LastKilledText.Visible = false
+        if YouDiedText.Visible then
+            YouDiedText.Visible = false
+        end
     end
 end
 
@@ -314,7 +324,16 @@ GameLoop.Event:Connect(function(bool: boolean)
 
         -- Blur settings
         -- Get player role
-        PlayerRole = Database:GetPlayerByUserId(LocalPlayer.UserId).Role
+        local PlayerData, idx = Database:GetPlayerByUserId(LocalPlayer.UserId)
+        PlayerRole = PlayerData.Role
+
+        if PlayerRole.Name == "Assassin" then
+            if #Database.Evils > 1 then
+                -- Assassin is not alone, lets show the assassin outline
+                local npcPart = Database.Evils[idx == 1 and 2 or 1].Part
+                AssassinOutline.Parent = npcPart
+            end
+        end
 
         if not PlayerRole.Behaviour["Nightfall"] then
             shouldBlur = true
