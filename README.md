@@ -1,3 +1,5 @@
+# Teste feito para Rogue Unit.
+
 ### How to Play:
 
 - Seers: At night, Seers can reveal a player's identity. If the Seer discovers an NPC who is an Assassin, they will vote to kick them out at dawn. Seers lose their memory when a new night begins.
